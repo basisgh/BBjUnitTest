@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Begin Project  -->
+<project name="BBjUnitTest" default="all">
+    <description>BBjUnitTest build file </description>
+
+    <!-- ====================================== -->
+    <!-- Properties -->
+
+    <!-- Load the user's local properties from a file called
+         user.build.properties in the same directory as the
+         local build.xml file.  -->
+    <property environment="env"/>
+    <property file="${basedir}/user.build.properties"/>
+    <property file="${basedir}/basis.build.properties"/>
+
+    <!-- Now let's set specific properties -->
+    <property name="log.bbj.dir"   value="${bbjunittest.install.dir}/log"/>
+    <property name="work.dir"      value="${jenkins.dir}/work"/>
+
+    <property name="display" value=":99.0"/>
+
+    <!-- Import AntContrib -->
+    <taskdef resource="net/sf/antcontrib/antlib.xml" />
+
+    <!-- End of Properties -->
+    <!-- ====================================== -->
+
+
+
+
+    <!-- ====================================== -->
+    <!-- Misc targets -->
+
+    <!-- clean -->
+    <target name="clean">
+        <!-- Clear out stuff from last install -->
+    </target>
+
+
+    <!-- createDirs -->
+    <target name="createDirs">
+        <!-- Create install directory including addon -->
+        <mkdir  dir="${bbjunittest.install.dir}"/>
+    </target>
+
+    <!-- End of Misc targets -->
+    <!-- ====================================== -->
+
+
+    <!-- ====================================== -->
+    <!-- run tests -->
+    <target name="bbj.tests">
+
+        <property name="bbjunittest.dir"  value="${jenkins.dir}/BBjUnitTest"/>
+        <property name="display"          value=":99.0"/>
+
+        <!-- <echo message="set DISPLAY=${display}"/> -->
+        <echo message="${bbjunittest.install.dir}/bin/bbj"/>
+        <echo message="  -q"/>
+        <echo message="  -tIO"/>
+        <echo message="  -WD${bbjunittest.dir}"/>
+        <echo message="  -CPunittest"/>
+        <echo message="  ${basedir}/bbjunittest.bbj"/>
+        <!-- <echo message="  -t"/> --> <!-- debug trace in {barista.bbj.dir}/workarea/ -->
+        <exec executable="${bbjunittest.install.dir}/bin/bbj" failonerror="true">
+            <!-- <env key="DISPLAY" value="${display}"/> -->
+            <arg value="-q"/>
+            <arg value="-tIO"/>
+            <arg value="-WD${bbjunittest.dir}"/>
+            <arg value="-CPunittest"/>
+            <arg value="${basedir}/bbjunittest.bbj"/>
+            <arg value="-"/>
+        </exec>
+    </target>
+    <!-- End of bbj.tests -->
+    <!-- ====================================== -->
+
+
+
+    <!-- ====================================== -->
+    <!-- Start BBjServices -->
+    <target name="bbj.start">
+
+        <!-- Use killBBjProcs to shutdown BBj -->
+        <exec executable="${bbjunittest.install.dir}/bin/bbjservices">
+              <env key="DISPLAY" value="${display}"/>
+        </exec>
+
+    </target>
+    <!-- End of bbj.start -->
+    <!-- ====================================== -->
+
+
+
+    <!-- ====================================== -->
+    <!-- Stop BBjServices -->
+    <target name="bbj.stop">
+
+        <!-- Use killBBjProcs to shutdown BBj -->
+        <exec executable="${bbjunittest.install.dir}/bin/killBBjProcs">
+            <arg value="BBjServices"/>
+        </exec>
+
+    </target>
+    <!-- End of bbj.stop -->
+    <!-- ====================================== -->
+
+
+
+    <!-- ====================================== -->
+    <!-- install BBj -->
+    <target name="bbj.install">
+        <!-- Clear out old stuff from last install -->
+        <echo message="deleting old stuff"/>
+        <delete dir="${work.dir}"/>
+        <delete file="${build.dir}/installBBj.jar"/>
+        <!--
+          This does not work, it is unable to remove install/cfg/.git
+          install/cfg/.git is created by BBjServices when it is started.  (I think)
+          Not sure why it cannot be removed.
+          -mes 21-may-2020
+            <delete dir="${bbjunittest.install.dir}"/>
+          -->
+
+        <!-- Unzip the BASIS installer -->
+        <echo message="unjar BBjInstaller.jar"/>
+        <mkdir dir="${work.dir}"/>
+        <unjar src="${build.dir}/BBjInstaller.jar" dest="${work.dir}"/>
+
+        <!-- Jar up the install into an installable jar -->
+        <echo message="jar installBBj.jar"/>
+        <jar destfile="${work.dir}/installBBj.jar">
+            <fileset dir="${work.dir}"
+                     includes="install.xml,
+                               com/basis/,
+                               com/google/gson/,
+                               javax/xml/,
+                               org/apache/commons/io/,
+                               org/bouncycastle/,
+                               org/json/,
+                               bus/,
+                               bbjgenerated/,
+                               BBjWebstartBootstrap.jar"/>
+            <fileset dir="${build.dir}"
+                     includes="package_*.jar"/>
+            <manifest>
+                <attribute name="Main-Class"
+                           value="com.basis.install.BASISInstallerStarter"/>
+            </manifest>
+        </jar>
+
+        <!-- Update the JENKINS_BUILD_DIR marker with the Jenkins build directory -->
+        <property name="bbjunittest.response.file"  value="${basedir}/bbjunittest_InstallResponse.properties"/>
+        <echo message="update ${bbjunittest.response.file}"/>
+        <replace file="${bbjunittest.response.file}"
+                 encoding="ISO-8859-1"
+                 token="BBJ_INSTALL_DIR"
+                 value="${bbjunittest.install.dir}"/>
+
+        <!-- Run BBj installer -->
+        <echo message="java jar ${work.dir}/installBBj.jar"/>
+        <java jar="${work.dir}/installBBj.jar"
+              fork="true"
+              jvm="/usr/java/adoptjdk/bin/java">
+            <arg value="-pl"/>
+            <arg value="${bbjunittest.response.file}"/>
+        </java>
+
+        <!-- Setup unittest classpath -->
+        <echo file="${bbjunittest.install.dir}/cfg/BBj.properties"
+              append="true"
+              message="basis.classpath.unittest=${jenkins.dir}/BBjUnitTest/lib/BBjUnitTest.jar"/>
+
+    </target>
+    <!-- End of bbj.install -->
+    <!-- ====================================== -->
+
+
+
+    <!-- ====================================== -->
+    <!-- sleep30 -->
+    <target name="sleep30">
+        <!-- Give BLM time to shutdown -->
+        <!-- Give BBjServices time to start -->
+        <sleep seconds="30"/>
+    </target>
+    <!-- End of sleep15 -->
+    <!-- ====================================== -->
+
+
+
+    <!-- ====================================== -->
+    <!-- build, do it all  -->
+    <target name="build"
+            depends="clean,
+                     bbj.install,
+                     bbj.start,
+                     sleep30,
+                     bbj.tests,
+                     bbj.stop,
+                     sleep30">
+    </target>
+    <!-- End of build  -->
+    <!-- ====================================== -->
+
+
+
+    <!-- ====================================== -->
+    <!-- build all  -->
+    <target name="all"
+            depends="build">
+    </target>
+    <!-- End of build all  -->
+    <!-- ====================================== -->
+
+<!-- End Project  -->
+</project>
+
